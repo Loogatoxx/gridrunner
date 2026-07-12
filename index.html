@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <title>GRIDRUNNER // terminal d'intrusion</title>
+  <link rel="stylesheet" href="css/terminal.css">
+</head>
+<body>
+  <!-- Écran CRT : barre de statut + zone terminal. Tout tient ici. -->
+  <div id="crt">
+    <header id="statusbar">
+      <span id="status-left">gridrunner</span>
+      <span id="status-right"></span>
+    </header>
+
+    <main id="screen">
+      <!-- Les lignes de sortie sont injectées ici par Terminal.print(). -->
+      <div id="output"></div>
+
+      <!-- Ligne de saisie : invite + texte tapé + curseur bloc.
+           Le vrai <input> est invisible et superposé (capture la frappe). -->
+      <div id="inputline">
+        <span id="prompt"></span><span id="typed"></span><span id="cursor"></span>
+        <input id="hidden-input" type="text"
+               autocomplete="off" autocapitalize="off"
+               autocorrect="off" spellcheck="false" aria-label="ligne de commande">
+      </div>
+    </main>
+  </div>
+
+  <!-- ORDRE DE CHARGEMENT : chaque module s'enregistre sur window.HT.
+       Les dépendances doivent être chargées avant leurs consommateurs. -->
+  <script src="js/core/VirtualFileSystem.js"></script>
+  <script src="js/core/CommandParser.js"></script>
+  <script src="js/core/StateMachine.js"></script>
+  <script src="js/core/Crypto.js"></script>
+  <script src="js/core/Network.js"></script>
+  <script src="js/core/world.js"></script>
+  <script src="js/core/CommandRegistry.js"></script>
+  <script src="js/core/GameEngine.js"></script>
+  <script src="js/core/commands.js"></script>
+  <script src="js/ui/Terminal.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

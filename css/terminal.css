@@ -1,0 +1,165 @@
+/* ==========================================================================
+   terminal.css  --  Direction artistique : BRUTALISTE, MONOCHROME, FONCTIONNEL
+   --------------------------------------------------------------------------
+   Blanc froid sur noir profond. Une seule police monospace. Aucune fioriture :
+   pas de dégradé, pas d'ombre colorée, pas de coin arrondi superflu. La lisibilité
+   fait le style. Deux teintes fonctionnelles seulement (ambre = alerte douce,
+   rouge éteint = erreur) parce qu'un vrai terminal en a besoin pour être utile.
+   Effet CRT : scanlines très légères + micro-flicker. Discret, jamais gadget.
+   ========================================================================== */
+
+:root {
+  --bg:        #050505;   /* noir profond (pas pur, plus réaliste sur écran) */
+  --fg:        #d6d6d6;   /* blanc froid, texte de base */
+  --fg-bright: #ffffff;   /* emphase */
+  --fg-dim:    #6a6a6a;   /* secondaire, métadonnées */
+  --fg-sys:    #8a8a8a;   /* aides système */
+  --amber:     #d8b46a;   /* alerte douce (warn / traçage) */
+  --red:       #d47b7b;   /* erreur (éteint, pas criard) */
+  --line:      #262626;   /* filets de séparation */
+  --font: 'SF Mono', 'JetBrains Mono', 'Fira Code', Menlo, Consolas,
+          'DejaVu Sans Mono', 'Liberation Mono', monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.45;
+  overflow: hidden;
+}
+
+/* Sélection en vidéo inverse, comme un terminal réel. */
+::selection { background: var(--fg); color: var(--bg); }
+
+/* Conteneur "écran". Occupe tout le viewport. */
+#crt {
+  position: relative;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  /* Léger halo sombre sur les bords (vignette CRT), très discret. */
+  box-shadow: inset 0 0 180px 30px rgba(0, 0, 0, 0.75);
+}
+
+/* Scanlines : lignes horizontales à peine visibles + micro-flicker global. */
+#crt::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.030) 0px,
+    rgba(255, 255, 255, 0.030) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  mix-blend-mode: overlay;
+  animation: flicker 6s infinite steps(60);
+  z-index: 5;
+}
+@keyframes flicker {
+  0%, 96%, 100% { opacity: 0.55; }
+  97%           { opacity: 0.42; }
+  98%           { opacity: 0.60; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #crt::after { animation: none; }
+  #cursor    { animation: none; }
+}
+
+/* ----- Barre de statut haute ------------------------------------------- */
+#statusbar {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  color: var(--fg-dim);
+  text-transform: uppercase;
+  background: #0a0a0a;
+  z-index: 6;
+}
+#status-left  { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#status-right { white-space: nowrap; display: flex; gap: 1.2rem; }
+#status-right .crit { color: var(--red); animation: pulse 0.8s steps(2) infinite; }
+@keyframes pulse { 50% { opacity: 0.35; } }
+
+/* ----- Zone principale de terminal ------------------------------------- */
+#screen {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 14px 16px 20px;
+  z-index: 6;
+}
+#screen::-webkit-scrollbar { width: 10px; }
+#screen::-webkit-scrollbar-track { background: transparent; }
+#screen::-webkit-scrollbar-thumb { background: #1e1e1e; }
+#screen::-webkit-scrollbar-thumb:hover { background: #2c2c2c; }
+
+/* Lignes de sortie. pre-wrap conserve l'alignement ASCII et évite le scroll H. */
+.line {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  min-height: 1.45em;
+}
+.dim    { color: var(--fg-dim); }
+.bright { color: var(--fg-bright); font-weight: 600; }
+.ok     { color: var(--fg-bright); font-weight: 600; }
+.warn   { color: var(--amber); }
+.err    { color: var(--red); }
+.sys    { color: var(--fg-sys); font-style: italic; }
+.prompt-echo { color: var(--fg-dim); }
+.cmd-echo    { color: var(--fg-bright); }
+
+/* ----- Ligne de saisie ------------------------------------------------- */
+#inputline {
+  display: flex;
+  align-items: baseline;
+  position: relative;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+#prompt { color: var(--fg-bright); flex: 0 0 auto; }
+#typed  { color: var(--fg); }
+
+/* Curseur bloc clignotant. */
+#cursor {
+  display: inline-block;
+  width: 0.6em;
+  height: 1.15em;
+  transform: translateY(0.2em);
+  background: var(--fg);
+  margin-left: 1px;
+  animation: blink 1.05s steps(1) infinite;
+}
+#cursor.idle { background: transparent; box-shadow: inset 0 0 0 1px var(--fg-dim); }
+@keyframes blink { 50% { opacity: 0; } }
+
+/* Champ réel qui capture la frappe : invisible, superposé à la ligne. */
+#hidden-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: transparent;
+  caret-color: transparent;
+  font: inherit;
+  padding: 0;
+  z-index: 7;
+}

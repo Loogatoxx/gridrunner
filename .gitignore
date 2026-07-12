@@ -1,0 +1,14 @@
+# macOS
+.DS_Store
+
+# Éditeurs
+.vscode/
+.idea/
+*.swp
+
+# Dossiers de travail temporaires
+scratch/
+tmp/
+
+# Réglages locaux Claude Code (spécifiques à la machine)
+.claude/settings.local.json
