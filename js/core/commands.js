@@ -21,6 +21,10 @@
  */
 (function () {
 
+// Dépendances (mini-jeux + pool d'augmentations), Node require OU window.HT.
+const { Minigame } =
+  (typeof module !== 'undefined' && module.exports) ? require('./Minigame') : globalThis.HT;
+
 function registerCommands(registry) {
 
   // -- Détail d'aide d'une commande (partagé par `help <cmd>` et `man`). ------
@@ -45,10 +49,10 @@ function registerCommands(registry) {
         return showManual(io, cmd);
       }
       // Vue d'ensemble, groupée par catégorie.
-      const order = ['base', 'reseau', 'crypto', 'anti-forensic', 'meta'];
+      const order = ['base', 'reseau', 'crypto', 'anti-forensic', 'darknet', 'meta'];
       const labels = {
         base: 'BASE', reseau: 'RESEAU', crypto: 'INTRUSION / CRYPTO',
-        'anti-forensic': 'ANTI-FORENSIQUE', meta: 'META',
+        'anti-forensic': 'ANTI-FORENSIQUE', darknet: 'DARKNET / ROGUE-LIKE', meta: 'META',
       };
       const byCat = {};
       engine.registry.all().forEach((c) => {
@@ -268,6 +272,8 @@ function registerCommands(registry) {
       const res = engine.connect(ip, user, pass);
       if (!res.ok) return io.error(`connect: ${res.msg}`);
       io.print(`[+] connexion etablie -> ${res.host.hostname} (${res.host.ip})`, 'ok');
+      if (engine.io.sfx) engine.io.sfx('ok');
+      if (res.bounty) io.print(`[+] premiere intrusion sur cet hote : +${res.bounty} credits.`, 'ok');
       const motd = res.host.vfs.resolve('/etc/motd', '/');
       if (motd && motd.isFile()) io.print(motd.content.replace(/\n$/, ''), 'dim');
       io.print(`session ${engine.session.user}${engine.session.isRoot ? ' (root)' : ''}. Tape 'ls' pour explorer, 'disconnect' pour sortir.`, 'sys');
@@ -291,7 +297,7 @@ function registerCommands(registry) {
   registry.register({
     name: 'crack', aliases: ['hashcat', 'john'], category: 'crypto', noTrace: true,
     usage: 'crack <empreinte>',
-    summary: 'Attaque une empreinte par dictionnaire.',
+    summary: 'Attaque une empreinte par dictionnaire (declenche un mini-jeu).',
     run(ctx) {
       const { io, engine, args } = ctx;
       const hash = args[0];
@@ -300,9 +306,72 @@ function registerCommands(registry) {
         return io.error("crack: ceci ne ressemble pas a une empreinte hexadecimale.");
       }
       io.print(`attaque par dictionnaire (${engine.wordlist.length} entrees) ...`, 'dim');
-      const plain = engine.crack(hash);
-      if (plain) io.print(`[+] EMPREINTE CASSEE : ${hash}  =>  ${plain}`, 'ok');
-      else io.print(`[-] aucune correspondance. Empreinte resistante au dictionnaire.`, 'warn');
+      const plain = engine.crackLookup(hash);
+      if (!plain) {
+        return io.print('[-] aucune correspondance. Empreinte resistante au dictionnaire.', 'warn');
+      }
+      // Le dictionnaire a trouvé un candidat : reste à forcer le pare-feu (mini-jeu).
+      const level = Math.min(3, 1 + Math.floor(engine.missionIndex / 2));
+      const succeed = () => {
+        io.print(`[+] EMPREINTE CASSEE : ${hash}  =>  ${plain}`, 'ok');
+        if (engine.io.sfx) engine.io.sfx('ok');
+        engine.emit({ type: 'crack', hash: String(hash).toLowerCase().trim(), plain });
+      };
+      if (engine.build.autoBypassLevel() >= level) {
+        io.print(`[auto-bruteforce] verrou niveau ${level} force automatiquement.`, 'sys');
+        return succeed();
+      }
+      io.print(`>> pare-feu niveau ${level} detecte -- resous le defi d'intrusion.`, 'warn');
+      const spec = Minigame.generate(level, engine._rng);
+      spec.timeMs = Math.round(spec.timeMs * engine.build.minigameTimeMultiplier());
+      engine.startChallenge(spec, (win) => {
+        if (win) return succeed();
+        io.print('[-] intrusion ratee ! le systeme durcit sa detection.', 'err');
+        if (engine.io.sfx) engine.io.sfx('error');
+        const r = engine.penalizeTrace(30);
+        io.print(r.applied ? `   trace +${r.dmg}. Relance 'crack' pour reessayer.`
+                           : "   relance 'crack' pour reessayer.", 'dim');
+      });
+    },
+  });
+
+  registry.register({
+    name: 'bypass', aliases: ['breach'], category: 'crypto', noTrace: true,
+    usage: 'bypass <ip>',
+    summary: 'Force le pare-feu d\'un noeud securise (mini-jeu). Paie en credits.',
+    run(ctx) {
+      const { io, engine, args } = ctx;
+      const ip = args[0];
+      if (!ip) return io.error('bypass: quelle cible ? Usage: bypass <ip>');
+      const host = engine.network.get(ip);
+      if (!host || !host.isReachableFrom(engine.location())) {
+        return io.error(`bypass: ${ip} injoignable d'ici.`);
+      }
+      if (host.bypassed) return io.print(`[+] ${host.hostname} : pare-feu deja force.`, 'dim');
+      host.discovered = true;
+      const level = host.secLevel || 1;
+      const reward = host.bounty || 20;
+      const succeed = () => {
+        host.bypassed = true;
+        host.scanned = true;
+        engine.build.addCredits(reward);
+        io.print(`[+] pare-feu de ${host.hostname} contourne. +${reward} credits.`, 'ok');
+        if (engine.io.sfx) engine.io.sfx('coin');
+      };
+      if (engine.build.autoBypassLevel() >= level) {
+        io.print(`[auto-bruteforce] noeud niveau ${level} force automatiquement.`, 'sys');
+        return succeed();
+      }
+      io.print(`>> intrusion active sur ${host.hostname} (niveau ${level}).`, 'warn');
+      const spec = Minigame.generate(level, engine._rng);
+      spec.timeMs = Math.round(spec.timeMs * engine.build.minigameTimeMultiplier());
+      engine.startChallenge(spec, (win) => {
+        if (win) return succeed();
+        io.print('[-] echec ! le noeud renforce sa detection.', 'err');
+        if (engine.io.sfx) engine.io.sfx('error');
+        const r = engine.penalizeTrace(25);
+        if (r.applied) io.print(`   trace +${r.dmg}.`, 'dim');
+      });
     },
   });
 
@@ -433,6 +502,104 @@ function registerCommands(registry) {
   });
 
   // ==========================================================================
+  // CATÉGORIE : DARKNET / ROGUE-LIKE (économie + boutique)
+  // ==========================================================================
+  registry.register({
+    name: 'shop', aliases: ['market', 'darknet'], category: 'darknet', noTrace: true,
+    usage: 'shop [refresh]',
+    summary: 'Ouvre le Darknet Market (augmentations a acheter).',
+    run(ctx) {
+      const { io, engine, args } = ctx;
+      if ((args[0] || '') === 'refresh') {
+        const cost = 10;
+        if (engine.build.credits < cost) return io.error(`shop: refresh coute ${cost} credits.`);
+        engine.build.addCredits(-cost);
+        engine.market.roll(engine.build, 3, engine._rng);
+        io.print(`[+] offres renouvelees (-${cost} credits).`, 'sys');
+      } else if (engine.market.offers.length === 0) {
+        engine.market.roll(engine.build, 3, engine._rng);
+      }
+      io.print('== DARKNET MARKET ==', 'bright');
+      io.print(`credits disponibles : ${engine.build.credits}`, 'ok');
+      if (engine.market.offers.length === 0) {
+        return io.print('  (rayon vide -- tout a ete achete)', 'dim');
+      }
+      engine.market.offers.forEach((it, i) => {
+        io.print(`  [${i + 1}] ${it.name.padEnd(16)} ${String(it.price).padStart(4)}c   (${it.rarity})`,
+                 engine.build.canAfford(it) ? '' : 'dim');
+        io.print(`      ${it.desc}`, 'dim');
+      });
+      io.print("  acheter : buy <numero>   |   renouveler : shop refresh (10c)", 'sys');
+    },
+  });
+
+  registry.register({
+    name: 'buy', category: 'darknet', noTrace: true,
+    usage: 'buy <numero>',
+    summary: 'Achete une augmentation du Darknet Market.',
+    run(ctx) {
+      const { io, engine, args } = ctx;
+      if (engine.market.offers.length === 0) return io.error("buy: ouvre d'abord le marche (shop).");
+      const i = parseInt(args[0], 10) - 1;
+      if (isNaN(i)) return io.error('buy: usage: buy <numero>');
+      const res = engine.market.buy(engine.build, i);
+      if (!res.ok) return io.error(`buy: ${res.msg}.`);
+      io.print(`[+] ${res.item.name} installe -- ${res.item.desc}.`, 'ok');
+      io.print(`   credits restants : ${engine.build.credits}`, 'dim');
+      if (engine.io.sfx) engine.io.sfx('coin');
+    },
+  });
+
+  registry.register({
+    name: 'sell', category: 'darknet', noTrace: true,
+    usage: 'sell <fichier> | all',
+    summary: 'Revend un fichier exfiltre (~/loot) contre des credits.',
+    run(ctx) {
+      const { io, engine, args } = ctx;
+      const loot = engine.localHost.vfs.resolve('/home/runner/loot', '/');
+      const files = loot ? [...loot.children.values()] : [];
+      if (!args[0]) {
+        if (files.length === 0) return io.print('~/loot est vide. Exfiltre des fichiers (download).', 'dim');
+        io.print('BUTIN A VENDRE (~/loot) :', 'bright');
+        files.forEach((n) => io.print(`  ${n.name.padEnd(20)} ~${Math.round((n.value != null ? n.value : 10) * engine.build.sellMultiplier())}c`, ''));
+        return io.print('  vendre : sell <fichier>  |  sell all', 'sys');
+      }
+      if (args[0] === 'all') {
+        if (files.length === 0) return io.print('rien a vendre.', 'dim');
+        let total = 0, count = 0;
+        files.forEach((n) => { const r = engine.sellFile(n.name); if (r.ok) { total += r.value; count++; } });
+        io.print(`[+] ${count} fichier(s) vendu(s). +${total} credits (total ${engine.build.credits}).`, 'ok');
+        if (engine.io.sfx) engine.io.sfx('coin');
+        return;
+      }
+      const r = engine.sellFile(args[0]);
+      if (!r.ok) return io.error(`sell: ${r.msg}.`);
+      io.print(`[+] ${r.name} vendu. +${r.value} credits (total ${engine.build.credits}).`, 'ok');
+      if (engine.io.sfx) engine.io.sfx('coin');
+    },
+  });
+
+  registry.register({
+    name: 'build', aliases: ['rig', 'augments'], category: 'darknet', noTrace: true,
+    summary: 'Affiche ton rig : credits, augmentations et modificateurs actifs.',
+    run(ctx) {
+      const { io, engine } = ctx;
+      const b = engine.build;
+      io.print('== RIG / BUILD ==', 'bright');
+      io.print(`credits : ${b.credits}`, 'ok');
+      const items = b.items();
+      if (items.length === 0) io.print('augmentations : (aucune -- visite le shop)', 'dim');
+      else items.forEach((it) => io.print(`  + ${it.name}  --  ${it.desc}`, ''));
+      io.print('modificateurs actifs :', 'dim');
+      io.print(`  vitesse de tracage   x${b.traceRateMultiplier().toFixed(2)}`, 'dim');
+      io.print(`  temps des mini-jeux  x${b.minigameTimeMultiplier().toFixed(2)}`, 'dim');
+      io.print(`  auto-bruteforce      niveau ${b.autoBypassLevel()}`, 'dim');
+      io.print(`  credits / commande   +${b.creditsPerCommand()}`, 'dim');
+      io.print(`  multiplicateur vente x${b.sellMultiplier().toFixed(2)}`, 'dim');
+    },
+  });
+
+  // ==========================================================================
   // CATÉGORIE : META
   // ==========================================================================
   registry.register({
@@ -487,6 +654,22 @@ function registerCommands(registry) {
     run(ctx) {
       ctx.engine.reset();
       ctx.io.print('progression reinitialisee. Nouvelle partie.', 'sys');
+    },
+  });
+
+  registry.register({
+    name: 'sound', aliases: ['audio', 'mute'], category: 'meta', noTrace: true,
+    usage: 'sound [on|off]',
+    summary: 'Active/coupe les effets sonores retro.',
+    run(ctx) {
+      const { io, engine, args } = ctx;
+      if (typeof engine.io.setMuted !== 'function') return io.print('audio indisponible dans ce contexte.', 'dim');
+      const arg = (args[0] || '').toLowerCase();
+      let muted;
+      if (arg === 'off') muted = engine.io.setMuted(true);
+      else if (arg === 'on') muted = engine.io.setMuted(false);
+      else muted = engine.io.setMuted();     // sans argument : bascule
+      io.print(`son : ${muted ? 'COUPE' : 'ACTIF'}`, 'sys');
     },
   });
 

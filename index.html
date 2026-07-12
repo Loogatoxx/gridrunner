@@ -8,39 +8,66 @@
   <link rel="stylesheet" href="css/terminal.css">
 </head>
 <body>
-  <!-- Écran CRT : barre de statut + zone terminal. Tout tient ici. -->
+  <!-- Écran CRT : barre de statut + (terminal | sidebar) + overlay mini-jeu. -->
   <div id="crt">
     <header id="statusbar">
       <span id="status-left">gridrunner</span>
       <span id="status-right"></span>
     </header>
 
-    <main id="screen">
-      <!-- Les lignes de sortie sont injectées ici par Terminal.print(). -->
-      <div id="output"></div>
+    <div id="body">
+      <main id="screen">
+        <!-- Lignes de sortie injectées par Terminal.print(). -->
+        <div id="output"></div>
 
-      <!-- Ligne de saisie : invite + texte tapé + curseur bloc.
-           Le vrai <input> est invisible et superposé (capture la frappe). -->
-      <div id="inputline">
-        <span id="prompt"></span><span id="typed"></span><span id="cursor"></span>
-        <input id="hidden-input" type="text"
-               autocomplete="off" autocapitalize="off"
-               autocorrect="off" spellcheck="false" aria-label="ligne de commande">
-      </div>
-    </main>
+        <!-- Ligne de saisie : invite + (texte | curseur-bloc | texte) + input.
+             Le curseur bloc affiche le caractère qu'il recouvre : les flèches
+             ←/→ le déplacent visuellement dans le texte. -->
+        <div id="inputline">
+          <span id="prompt"></span><span id="cmd"><span id="typed"></span><span id="cursor"> </span><span id="after"></span></span>
+          <input id="hidden-input" type="text"
+                 autocomplete="off" autocapitalize="off"
+                 autocorrect="off" spellcheck="false" aria-label="ligne de commande">
+        </div>
+      </main>
+
+      <!-- Panneau latéral : crédits, carte réseau cliquable, rig. -->
+      <aside id="sidebar">
+        <section class="side-block">
+          <div class="side-title">CRYPTO-CREDITS</div>
+          <div id="side-credits">0 ₡</div>
+        </section>
+        <section class="side-block side-grow">
+          <div class="side-title">NETWORK MAP</div>
+          <div id="side-nodes"></div>
+        </section>
+        <section class="side-block">
+          <div class="side-title">RIG / AUGMENTS</div>
+          <div id="side-build"></div>
+        </section>
+      </aside>
+    </div>
+
+    <!-- Conteneur des mini-jeux en surimpression. -->
+    <div id="minigame-root"></div>
   </div>
 
   <!-- ORDRE DE CHARGEMENT : chaque module s'enregistre sur window.HT.
-       Les dépendances doivent être chargées avant leurs consommateurs. -->
+       Les dépendances sont chargées avant leurs consommateurs. -->
   <script src="js/core/VirtualFileSystem.js"></script>
   <script src="js/core/CommandParser.js"></script>
   <script src="js/core/StateMachine.js"></script>
   <script src="js/core/Crypto.js"></script>
   <script src="js/core/Network.js"></script>
+  <script src="js/core/PlayerBuild.js"></script>
+  <script src="js/core/Market.js"></script>
+  <script src="js/core/Minigame.js"></script>
   <script src="js/core/world.js"></script>
   <script src="js/core/CommandRegistry.js"></script>
   <script src="js/core/GameEngine.js"></script>
   <script src="js/core/commands.js"></script>
+  <script src="js/ui/AudioFX.js"></script>
+  <script src="js/ui/MinigameUI.js"></script>
   <script src="js/ui/Terminal.js"></script>
   <script src="js/main.js"></script>
 </body>

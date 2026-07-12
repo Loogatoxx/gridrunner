@@ -63,3 +63,41 @@ Correction d'un bug de scope (collision de `const`/`class` au scope global des
 Livrer un jeu complet, robuste et pédagogique, avec une architecture propre à
 étudier (State Machine, VFS orienté objet, Command Parser blindé), et le rendre
 récupérable directement via un dépôt GitHub privé.
+
+---
+
+## Entrée 003 — 2026-07-12 — v2.0 : ergonomie, mini-jeux, boucle rogue-like
+
+**Prompt (résumé) :**
+Étape 2. (1) Corriger l'input : curseur qui se déplace visuellement avec ←/→ ;
+sélection souris + copier-coller (Ctrl+C/V, clic droit) sans casser le focus.
+(2) Mini-jeux de hacking en surimpression sur crack/bypass (mémoire de séquence,
+grille hexa type Cyberpunk 2077, nœuds à cliquer), échec = trace qui bondit ;
+sons rétro (Web Audio) ; carte réseau cliquable. (3) Boucle rogue-like : économie
+de crypto-crédits (piratage + revente de fichiers), Darknet Market (3 augments
+aléatoires), module PlayerBuild/StatsModifier appliquant les bonus dynamiquement,
+Game Over à 100% de trace avec méta-progression conservée. Auto-tests + push v2.0.
+
+**Réponse (résumé) :**
+Nouveaux modules coeur (testables sous Node) : PlayerBuild (augmentations repliées
+en stats), Market (boutique), Minigame (logique des défis). Moteur étendu :
+crédits, prime d'intrusion, revente, crypto-miner, startChallenge (mini-jeu async),
+penalizeTrace, Game Over rogue-like (_gameOver + _rebuildRun + _rehydrateToMission),
+sauvegarde v2. Nouvelles commandes : bypass, shop, buy, sell, build, sound ; crack
+déclenche désormais un mini-jeu. Nouveaux modules UI : AudioFX (sons synthétisés),
+MinigameUI (modals mémoire/hexgrid/nodes). Refonte de Terminal.js : curseur
+positionnel (rendu en 3 morceaux avant/curseur/après), sélection souris (focus volé
+uniquement sur clic simple), collage nettoyé, sidebar (crédits + carte réseau
+cliquable + rig), flash d'alarme rouge. Tests portés à 102 assertions (toutes
+vertes) + vérifications navigateur (curseur, sélection, 3 types de mini-jeux,
+crack→mini-jeu→succès, boutique, carte réseau, zéro erreur console).
+
+**Modifications :**
+- Ajout : js/core/PlayerBuild.js, Market.js, Minigame.js ; js/ui/AudioFX.js, MinigameUI.js.
+- Modifié : GameEngine.js, commands.js, world.js, Network.js, VirtualFileSystem.js,
+  Terminal.js, index.html, css/terminal.css, tests/run.js, README.md.
+
+**Objectif :**
+Faire exploser l'interactivité et la rejouabilité (dopamine + rogue-like) tout en
+corrigeant l'ergonomie de saisie, sans sacrifier la propreté ni la testabilité de
+l'architecture.

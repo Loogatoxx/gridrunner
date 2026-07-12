@@ -29,11 +29,14 @@ const _e = (typeof module !== 'undefined' && module.exports)
       require('./CommandParser'),
       require('./CommandRegistry'),
       require('./Crypto'),
-      require('./world'))
+      require('./world'),
+      require('./PlayerBuild'),
+      require('./Market'))
   : globalThis.HT;
-const { createTerminalFSM, TERMINAL_STATES, CommandParser, CommandRegistry, Crypto, buildWorld } = _e;
+const { createTerminalFSM, TERMINAL_STATES, CommandParser, CommandRegistry,
+        Crypto, buildWorld, PlayerBuild, Market } = _e;
 
-const SAVE_KEY = 'hackerterm.save.v1';
+const SAVE_KEY = 'gridrunner.save.v2';
 
 class GameEngine {
   /**
@@ -49,6 +52,13 @@ class GameEngine {
 
     this.registry = new CommandRegistry();
     this.fsm = createTerminalFSM((from, to) => this._onStateChange(from, to));
+
+    // -- Méta-progression rogue-like : survit aux Game Over (pas au `reset`). --
+    this.build = new PlayerBuild();   // crédits + augmentations achetées
+    this.market = new Market();       // le Darknet Market
+    this.meta = { detections: 0 };    // stats méta (nb de fois grillé…)
+    this.busy = false;                // true pendant un mini-jeu (bloque la saisie)
+    this._rng = Math.random;          // injectable pour rendre les défis déterministes
 
     this._initWorld();
   }
@@ -136,6 +146,10 @@ class GameEngine {
 
     this.registry.execute(parsed.name, ctx);
 
+    // Crypto-Miner : l'augmentation génère des crédits à chaque commande tapée.
+    const mined = this.build.creditsPerCommand();
+    if (mined) this.build.addCredits(mined);
+
     // Traçage : chaque action "réelle" sur un hôte distant fait monter la trace.
     if (this.trace.enabled && this.trace.armed && this.isRemote() && !cmd.noTrace) {
       this._tickTrace();
@@ -145,23 +159,96 @@ class GameEngine {
   }
 
   _tickTrace() {
-    this.trace.level = Math.min(this.trace.max, this.trace.level + this.session.host.traceRate);
-    if (this.trace.level >= this.trace.max) this._traceOut();
+    // La vitesse de base de l'hôte est modulée par les augmentations (Ghost-Mask…).
+    const rate = Math.max(1, Math.round(this.session.host.traceRate * this.build.traceRateMultiplier()));
+    this.trace.level = Math.min(this.trace.max, this.trace.level + rate);
+    if (this.trace.level >= this.trace.max) this._gameOver();
   }
 
-  /** Le traçage a abouti : on coupe TOUT et on renvoie le joueur chez lui. */
-  _traceOut() {
+  /**
+   * Pénalité de traçage (échec de mini-jeu). Réduite par Black-ICE.
+   * @returns {{applied:boolean, dmg?:number}}
+   */
+  penalizeTrace(n) {
+    if (!(this.trace.armed && this.trace.enabled)) return { applied: false };
+    const dmg = Math.max(1, Math.round(n * this.build.failPenaltyMultiplier()));
+    this.trace.level = Math.min(this.trace.max, this.trace.level + dmg);
+    if (this.trace.level >= this.trace.max) this._gameOver();
+    return { applied: true, dmg };
+  }
+
+  /**
+   * Lance un défi (mini-jeu) et exécute `onResult(win)` à la fin.
+   * En mode sans UI (tests Node), le défi est auto-réussi : la logique de jeu
+   * reste testable de bout en bout sans DOM.
+   */
+  startChallenge(spec, onResult) {
+    this.busy = true;
+    const done = (win) => {
+      this.busy = false;
+      try { onResult(!!win); }
+      finally { this.io.status(this); this.save(); }
+    };
+    if (typeof this.io.minigame === 'function') this.io.minigame(spec, done);
+    else done(true);
+  }
+
+  /**
+   * GAME OVER — le traçage a atteint 100%. Boucle rogue-like : le "run" est
+   * perdu (réseau réinitialisé, sessions coupées, objectifs de la mission
+   * courante remis à zéro) MAIS la méta-progression est conservée : crédits et
+   * augmentations restent acquis. On repart au début de la mission courante.
+   */
+  _gameOver() {
+    this.meta.detections = (this.meta.detections || 0) + 1;
     this.io.print('', '');
-    this.io.print('!! TRACE COMPLETE -- localisation etablie par le SOC AEGIS.', 'err');
-    this.io.print('!! Connexion terminee de force. Toutes les sessions sont tombees.', 'err');
-    this.io.print('   Reconnecte-toi et va plus vite. Efface les logs (shred) pour', 'dim');
-    this.io.print('   remettre la trace a zero, ou desactive la pression : trace off.', 'dim');
-    // On vide la pile jusqu'à la machine locale.
-    this.sessions = [this.sessions[0]];
-    this.trace.level = 0;
+    this.io.print('  ############  GAME OVER  ############', 'err');
+    this.io.print('  Trace 100% -- le SOC AEGIS a verrouille ta position.', 'err');
+    this.io.print('  Run perdu. Credits et augmentations CONSERVES (meta-progression).', 'dim');
+    this.io.print('  Le reseau se reinitialise -- retente la mission courante.', 'dim');
+    if (this.io.sfx) this.io.sfx('alarm');
     if (this.fsm.is(TERMINAL_STATES.CONNECTED)) {
       this.fsm.transition(TERMINAL_STATES.TRACED_OUT);
       this.fsm.transition(TERMINAL_STATES.LOCAL);
+    }
+    const idx = this.missionIndex;
+    this._rebuildRun();
+    this._rehydrateToMission(idx);
+    this.save();
+  }
+
+  /** Monde neuf + sessions locales, SANS toucher à la méta (build, missionIndex). */
+  _rebuildRun() {
+    const world = buildWorld();
+    this.localHost = world.localHost;
+    this.network = world.network;
+    this.missions = world.missions;
+    this.wordlist = world.wordlist;
+    this.sessions = [{ host: this.localHost, user: 'runner', isRoot: false, cwd: this.localHost.vfs.home }];
+    this.trace = { enabled: this.trace.enabled, armed: false, level: 0, max: 100 };
+    this.mailbox = [];
+    this.finished = false;
+  }
+
+  /** Rejoue silencieusement les missions déjà franchies et (ré)arme la courante. */
+  _rehydrateToMission(idx) {
+    idx = Math.max(0, Math.min(this.missions.length - 1, idx | 0));
+    for (let i = 0; i < idx; i++) {
+      this.missions[i].completed = true;
+      this.missions[i].objectives.forEach((o) => { o.done = true; });
+    }
+    this.missionIndex = idx;
+    const cur = this.currentMission();
+    if (cur) {
+      cur.completed = false;
+      cur.objectives.forEach((o) => { o.done = false; });
+      if (cur.armsTrace) this.trace.armed = true;
+      if (cur.mail) {
+        this.mailbox.push({
+          from: cur.mail.from, subject: cur.mail.subject,
+          body: cur.mail.body, unread: true, missionId: cur.id,
+        });
+      }
     }
   }
 
@@ -182,6 +269,7 @@ class GameEngine {
     if (!host || !host.isReachableFrom(this.location())) {
       return { ok: false, msg: `aucune route vers l'hote ${ip} (hors de portee d'ici)` };
     }
+    const firstTime = !host.compromised; // prime versée à la 1re intrusion
     if (host.requiresAuth) {
       if (!user || pass === undefined) {
         return { ok: false, msg: `authentification requise. Usage: connect ${ip} <user> <pass>` };
@@ -198,8 +286,29 @@ class GameEngine {
     // Nouvelle prise de pied → compteur de trace neuf.
     this.trace.level = 0;
     if (this.fsm.is(TERMINAL_STATES.LOCAL)) this.fsm.transition(TERMINAL_STATES.CONNECTED);
+    let bounty = 0;
+    if (firstTime) { bounty = host.bounty || 15; this.build.addCredits(bounty); }
     this.emit({ type: 'connect', ip: host.ip, user: this.session.user, root: this.session.isRoot });
-    return { ok: true, host };
+    return { ok: true, host, bounty };
+  }
+
+  /** Cherche le clair d'une empreinte SANS émettre d'évènement (pour `crack`). */
+  crackLookup(hash) { return Crypto.crackWithWordlist(hash, this.wordlist); }
+
+  /**
+   * Revend un fichier de ~/loot contre des crédits (× multiplicateur de revente).
+   * @returns {{ok:boolean, value?:number, name?:string, msg?:string}}
+   */
+  sellFile(name) {
+    const loot = this.localHost.vfs.resolve('/home/runner/loot', '/');
+    if (!loot || !loot.isDir()) return { ok: false, msg: 'pas de butin' };
+    const node = loot.getChild(name);
+    if (!node) return { ok: false, msg: `aucun butin nomme '${name}'` };
+    const base = node.value != null ? node.value : (10 + Math.floor((node.content || '').length / 6));
+    const value = Math.round(base * this.build.sellMultiplier());
+    loot.removeChild(name);
+    this.build.addCredits(value);
+    return { ok: true, value, name };
   }
 
   /**
@@ -251,9 +360,11 @@ class GameEngine {
     // Copie défensive : le fichier exfiltré est indépendant de l'original.
     const VfsNode = node.constructor;
     const dup = new VfsNode(node.name, 'file', { content: node.content, owner: 'runner' });
+    // Valeur de revente : les fichiers d'un hôte "important" valent plus cher.
+    dup.value = (node.value != null ? node.value : 12) + Math.floor((this.session.host.bounty || 10) / 2);
     loot.children.set(dup.name, dup);
     this.emit({ type: 'download', path: this.canonical(path), ip: this.location() });
-    return { ok: true };
+    return { ok: true, value: dup.value };
   }
 
   /** Émet un évènement de jeu vers la mission courante puis teste sa complétion. */
@@ -346,6 +457,8 @@ class GameEngine {
       localStorage.setItem(SAVE_KEY, JSON.stringify({
         missionIndex: this.missionIndex,
         traceEnabled: this.trace.enabled,
+        build: this.build.toJSON(),   // méta : crédits + augmentations
+        meta: this.meta,
       }));
     } catch (_) { /* quota / mode privé : on ignore, le jeu marche sans sauvegarde */ }
   }
@@ -356,30 +469,24 @@ class GameEngine {
       const raw = localStorage.getItem(SAVE_KEY);
       if (!raw) return false;
       const data = JSON.parse(raw);
-      const idx = Math.max(0, Math.min(this.missions.length - 1, data.missionIndex | 0));
-      // On rejoue silencieusement les missions déjà franchies (marque + mails).
-      for (let i = 0; i < idx; i++) {
-        this.missions[i].completed = true;
-        this.missions[i].objectives.forEach((o) => { o.done = true; });
-      }
-      this.missionIndex = idx;
+      // Méta-progression d'abord (crédits, augmentations, stats).
+      this.build = PlayerBuild.fromJSON(data.build);
+      this.meta = data.meta || { detections: 0 };
       this.trace.enabled = data.traceEnabled !== false;
-      // On (re)pose le mail de la mission courante pour que `mail` fonctionne.
-      const cur = this.currentMission();
-      if (cur && cur.mail) {
-        this.mailbox.push({
-          from: cur.mail.from, subject: cur.mail.subject,
-          body: cur.mail.body, unread: true, missionId: cur.id,
-        });
-      }
+      // Puis on se replace à la bonne mission (marque les précédentes + mail).
+      this._rehydrateToMission(data.missionIndex | 0);
       return true;
     } catch (_) { return false; }
   }
 
+  /** Réinitialisation TOTALE (choix du joueur) : efface aussi la méta-progression. */
   reset() {
     if (typeof localStorage !== 'undefined') {
       try { localStorage.removeItem(SAVE_KEY); } catch (_) {}
     }
+    this.build = new PlayerBuild();
+    this.market = new Market();
+    this.meta = { detections: 0 };
     // FSM neuve + monde neuf.
     this.fsm = createTerminalFSM((from, to) => this._onStateChange(from, to));
     this.fsm.transition(TERMINAL_STATES.LOCAL);

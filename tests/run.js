@@ -23,6 +23,20 @@ const { Crypto } = require('../js/core/Crypto');
 const { buildWorld } = require('../js/core/world');
 const { GameEngine } = require('../js/core/GameEngine');
 const { registerCommands } = require('../js/core/commands');
+const { Minigame } = require('../js/core/Minigame');
+const { PlayerBuild, AUGMENTATIONS, AUG_BY_ID } = require('../js/core/PlayerBuild');
+const { Market } = require('../js/core/Market');
+
+// RNG déterministe (mulberry32) pour tester génération de défis / boutique.
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
 
 // -- Mini framework de test --------------------------------------------------
 let passed = 0, failed = 0;
@@ -268,6 +282,134 @@ section('7. Mécanique de traçage (se faire griller)');
   g2.engine.connect('198.51.100.23', 'guest', 'guest');
   for (let i = 0; i < 30; i++) g2.engine.runLine('ls');
   ok('trace OFF : jamais grille', g2.engine.isRemote() && g2.engine.trace.level === 0);
+}
+
+// ============================================================================
+section('8. Mini-jeux (logique)');
+{
+  // Déterminisme : même graine -> même défi.
+  const a = Minigame.generateKind('hexgrid', 2, mulberry32(42));
+  const b = Minigame.generateKind('hexgrid', 2, mulberry32(42));
+  ok('generation deterministe (meme graine)', JSON.stringify(a.targets) === JSON.stringify(b.targets));
+  ok('hexgrid: bonne reponse validee', Minigame.evaluate(a, a.targets.slice()));
+  ok('hexgrid: mauvaise reponse rejetee', !Minigame.evaluate(a, ['ZZ', 'YY']));
+
+  const seq = Minigame.generateKind('sequence', 3, mulberry32(1));
+  ok('sequence: reproduction correcte validee', Minigame.evaluate(seq, seq.steps.slice()));
+  ok('sequence: reproduction fausse rejetee', !Minigame.evaluate(seq, seq.steps.slice().reverse().concat(9)));
+
+  const nodes = Minigame.generateKind('nodes', 2, mulberry32(2));
+  ok('nodes: ordre correct (1..n) valide', Minigame.evaluate(nodes, nodes.nodes.map((n) => n.n)));
+  ok('nodes: mauvais ordre rejete', !Minigame.evaluate(nodes, nodes.nodes.map((n) => n.n).reverse()));
+
+  const gen = Minigame.generate(2, mulberry32(5));
+  ok('generate() renvoie un type connu', Minigame.KINDS.includes(gen.kind));
+  ok('generate() fixe un chrono', typeof gen.timeMs === 'number' && gen.timeMs > 0);
+  noThrow('evaluate tolere une entree nulle', () => Minigame.evaluate(gen, null));
+}
+
+// ============================================================================
+section('9. PlayerBuild / StatsModifier');
+{
+  const b = new PlayerBuild();
+  b.addCredits(300);
+  const gm = AUG_BY_ID['ghostmask'];
+  ok('canAfford correct', b.canAfford(gm));
+  ok('buy debite et possede', b.buy(gm) && b.credits === 300 - gm.price && b.has('ghostmask'));
+  ok('buy refuse un doublon', b.buy(gm) === false);
+  eq('traceRateMultiplier (Ghost-Mask -30%)', b.traceRateMultiplier(), 0.70);
+  b.own('overclock');
+  eq('minigameTimeMultiplier (Overclock +20%)', Number(b.minigameTimeMultiplier().toFixed(2)), 1.20);
+  b.own('rootkit');
+  eq('autoBypassLevel prend le max', b.autoBypassLevel(), 2);
+  b.own('cryptominer');
+  eq('creditsPerCommand', b.creditsPerCommand(), 1);
+  b.own('coldwallet');
+  eq('sellMultiplier (Cold-Wallet +50%)', b.sellMultiplier(), 1.5);
+
+  const poor = new PlayerBuild();
+  ok('buy refuse si credits insuffisants', poor.buy(AUG_BY_ID['rootkit']) === false);
+
+  // Sérialisation méta.
+  const j = b.toJSON();
+  const b2 = PlayerBuild.fromJSON(j);
+  ok('serialisation conserve credits + augments', b2.credits === b.credits && b2.has('ghostmask') && b2.has('rootkit'));
+}
+
+// ============================================================================
+section('10. Darknet Market');
+{
+  const b = new PlayerBuild(); b.addCredits(1000);
+  const m = new Market();
+  const offers = m.roll(b, 3, mulberry32(7));
+  eq('roll propose 3 offres', offers.length, 3);
+  ok('offres distinctes', new Set(offers.map((o) => o.id)).size === 3);
+
+  b.own(offers[0].id);
+  const offers2 = m.roll(b, 3, mulberry32(7));
+  ok('roll exclut ce qui est deja possede', offers2.every((o) => o.id !== offers[0].id));
+
+  const before = b.credits;
+  const target = m.offers[0];
+  const res = m.buy(b, 0);
+  ok('buy reussit et debite', res.ok && b.credits === before - target.price && b.has(target.id));
+  eq('offre retiree de l etal apres achat', m.offers.length, 2);
+}
+
+// ============================================================================
+section('11. Economie in-game');
+{
+  const { engine } = newGame();
+  const play = (l) => engine.runLine(l);
+  eq('credits de depart', engine.build.credits, 0);
+
+  play('scan 198.51.100.23');
+  play('connect 198.51.100.23 guest guest');
+  eq('prime de premiere intrusion (gate bounty 20)', engine.build.credits, 20);
+
+  play('download /home/guest/notes.txt');
+  const c0 = engine.build.credits;
+  play('sell notes.txt');
+  ok('la revente rapporte des credits', engine.build.credits > c0);
+
+  // Crypto-Miner : +1 credit par commande.
+  engine.build.own('cryptominer');
+  const c1 = engine.build.credits;
+  play('pwd');
+  eq('crypto-miner : +1 credit par commande', engine.build.credits, c1 + 1);
+}
+
+// ============================================================================
+section('12. Game Over rogue-like (meta-progression)');
+{
+  const { engine } = newGame();
+  engine.build.addCredits(100);
+  engine.build.own('ghostmask');            // -30% de tracage
+  engine.trace.armed = true;
+  engine.connect('198.51.100.23', 'guest', 'guest'); // +20 credits, session distante
+  const creditsBefore = engine.build.credits;
+
+  let caught = false;
+  for (let i = 0; i < 60 && !caught; i++) {
+    engine.runLine('ls');
+    if (!engine.isRemote()) caught = true;   // le Game Over ramene en local
+  }
+  ok('Game Over declenche (trace 100%)', caught);
+  ok('credits CONSERVES apres Game Over', engine.build.credits >= creditsBefore);
+  ok('augmentation CONSERVEE apres Game Over', engine.build.has('ghostmask'));
+  eq('detection comptabilisee (meta)', engine.meta.detections, 1);
+  eq('mission courante conservee', engine.missionIndex, 0);
+  ok('reseau reinitialise (hote non compromis)', engine.network.get('198.51.100.23').compromised === false);
+  eq('trace remise a zero apres reset', engine.trace.level, 0);
+
+  // Ghost-Mask ralentit vraiment : plus de coups pour tomber qu'un build nu.
+  const g2 = newGame(); g2.engine.trace.armed = true;
+  g2.engine.connect('198.51.100.23', 'guest', 'guest');
+  let ticksNu = 0; while (g2.engine.isRemote() && ticksNu < 60) { g2.engine.runLine('ls'); ticksNu++; }
+  const g3 = newGame(); g3.engine.build.own('ghostmask'); g3.engine.trace.armed = true;
+  g3.engine.connect('198.51.100.23', 'guest', 'guest');
+  let ticksMask = 0; while (g3.engine.isRemote() && ticksMask < 60) { g3.engine.runLine('ls'); ticksMask++; }
+  ok('Ghost-Mask retarde la detection', ticksMask > ticksNu, `nu=${ticksNu}, masque=${ticksMask}`);
 }
 
 // ============================================================================

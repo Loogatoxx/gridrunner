@@ -58,11 +58,14 @@
       this.logging = cfg.logging !== false;
       this.traceRate = cfg.traceRate != null ? cfg.traceRate : 8;
       this.logPath = cfg.logPath || '/var/log/auth.log';
+      this.secLevel = cfg.secLevel || 1;                      // niveau du pare-feu (mini-jeu)
+      this.bounty = cfg.bounty != null ? cfg.bounty : 10;     // crédits à la 1re intrusion
 
       // État de progression (muté en cours de partie).
       this.discovered = false;   // apparu via `net` / mission
       this.scanned = false;      // ports révélés via `scan`
       this.compromised = false;  // au moins un shell obtenu
+      this.bypassed = false;     // pare-feu forcé via `bypass`
     }
 
     /** Ports ouverts uniquement. */

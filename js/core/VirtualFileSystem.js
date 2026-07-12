@@ -55,6 +55,8 @@ class VfsNode {
       this.content = opts.content || '';
       this.encrypted = opts.encrypted || false;
       this.encKey = opts.encKey || null;
+      // Valeur de revente indicative (utilisée par l'économie rogue-like).
+      this.value = opts.value != null ? opts.value : null;
     }
   }
 

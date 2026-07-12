@@ -150,7 +150,7 @@ sshd:!:20050:0:99999:7:::`),
 
  Casse l'empreinte, pivote depuis ici, recupere blackfile.
 =========================================================`,
-        { owner: 'root', locked: true, encrypted: true, encKey: 'AEGIS-CORE-9' }),
+        { owner: 'root', locked: true, encrypted: true, encKey: 'AEGIS-CORE-9', value: 45 }),
   ]));
   gateVfs.root.addChild(D('var', {}, [
     D('log', {}, [
@@ -178,6 +178,8 @@ sshd:!:20050:0:99999:7:::`),
     requiresAuth: true,
     logging: true,
     traceRate: 12,
+    secLevel: 1,
+    bounty: 20,
     reachableFrom: ['*'],
   }));
 
@@ -195,7 +197,7 @@ sshd:!:20050:0:99999:7:::`),
  Moi ? J'ai construit ORACLE. Puis j'ai compris ce que j'avais
  fait. Appelle-moi NULL.
 =========================================================`,
-        { locked: true, encrypted: true, encKey: 'ORACLE' }),
+        { locked: true, encrypted: true, encKey: 'ORACLE', value: 120 }),
     F('.k', 'ORACLE\n', { hidden: true, locked: true }),
     F('README', 'noyau ORACLE -- ne pas eteindre. Journalisation permanente active.\n'),
   ]));
@@ -217,6 +219,8 @@ sshd:!:20050:0:99999:7:::`),
     requiresAuth: true,
     logging: true,
     traceRate: 20,                    // le mainframe trace vite : tension maximale
+    secLevel: 2,                      // pare-feu plus coriace (mini-jeu niveau 2)
+    bounty: 45,
     reachableFrom: ['198.51.100.23'], // pivoting obligatoire
   }));
 
