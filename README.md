@@ -1,191 +1,87 @@
-# GRIDRUNNER
+# 💻 GRIDRUNNER
 
-Un mini-jeu web **« hacker terminal »** dans l'esprit de *Hacknet* / *Uplink*.
-Tu incarnes un runner recruté par une entité anonyme, **NULL**, pour infiltrer le
-réseau de la méga-corpo **Aegis Dynamics**, remonter jusqu'à son mainframe interne
-et en exfiltrer la preuve d'un programme de surveillance de masse — sans laisser
-la moindre trace.
+**A hacker-terminal web game in the spirit of *Hacknet* and *Uplink*.**
+You play a runner recruited by an anonymous entity, **NULL**, to break into the network of the mega-corp **Aegis Dynamics**, reach its internal mainframe and leak proof of a mass-surveillance programme, without leaving a trace.
 
-HTML / CSS / **JavaScript pur**, zéro dépendance, zéro build. Direction artistique
-brutaliste : blanc froid sur noir profond, monospace, scanlines discrètes.
+![JavaScript](https://img.shields.io/badge/JavaScript-vanilla-F7DF1E?style=flat-square&logo=javascript&logoColor=black)
+![Zero dependencies](https://img.shields.io/badge/dependencies-0-1a4d7a?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-102%20assertions-2ea043?style=flat-square)
+![Built with Claude Code](https://img.shields.io/badge/Built%20with-Claude%20Code-D97757?style=flat-square)
+![License: MIT](https://img.shields.io/badge/License-MIT-1a4d7a?style=flat-square)
 
-**v2.0 — boucle rogue-like :** mini-jeux de hacking en surimpression (crack /
-bypass), économie de **crypto-crédits**, **Darknet Market** d'augmentations,
-carte réseau cliquable, effets sonores rétro (Web Audio) et **Game Over** avec
-méta-progression conservée.
+**▶ Play it in your browser:** https://loogatoxx.github.io/gridrunner/ (the game text is in French)
 
----
+🇫🇷 [Version française](README.fr.md)
 
-## Jouer
+<p align="center"><img src="docs/demo.gif" alt="GRIDRUNNER gameplay: reading mail, listing files, opening the Darknet Market" width="800"></p>
 
-Deux façons :
+Plain HTML / CSS / **JavaScript**, with zero dependencies and no build step. The art direction is brutalist: cold white on deep black, monospace, subtle scanlines.
+
+## Play locally
 
 ```bash
-# 1) Le plus simple : ouvrir le fichier directement
-open index.html            # (macOS)  — double-cliquer marche aussi
-
-# 2) Ou via un petit serveur local (recommandé, évite tout souci de cache)
-python3 -m http.server 4173
-# puis http://localhost:4173
+open index.html              # or double-click it
+# or, to avoid any cache issue:
+python3 -m http.server 4173  # then http://localhost:4173
 ```
 
-Aucune installation, aucun paquet. Le jeu est 100 % hors-ligne.
+Type **`help`** for the command list and **`mail`** to read your first orders. Progress is saved automatically (`localStorage`). `reset` starts over.
 
-Au démarrage, tape **`help`** pour la liste des commandes et **`mail`** pour lire
-tes premiers ordres. La progression est sauvegardée automatiquement
-(`localStorage`) ; `reset` repart de zéro.
+## The campaign
 
----
+| Mission | Name | What you learn |
+|--------:|------|----------------|
+| 1 | **ORIENTATION** | Find your way: `ls`, `cat`, `cd`, `pwd` |
+| 2 | **RECON** | Map the network: `scan` (ports), `connect` (remote shell) |
+| 3 | **ESCALATION** | `crack` (dictionary attack on a hash), `su`, `decrypt` |
+| 4 | **CLEANUP** | Anti-forensics: read then `shred` logs, manage the **trace** |
+| 5 | **ORACLE** | Put it all together: network **pivoting**, exfiltration, full wipe |
 
-## Progression pédagogique
+From mission 4 on, every action on a remote host fills a trace gauge. If it maxes out, it's **Game Over**: the run is lost, but credits and upgrades are kept.
 
-La campagne enseigne les mécaniques d'intrusion par paliers :
+## Rogue-like loop (v2.0)
 
-| Mission | Nom | Ce que tu apprends |
-|--------:|-----|--------------------|
-| 1 | **ORIENTATION** | Se repérer : `ls`, `cat`, `cd`, `pwd` |
-| 2 | **RECON** | Cartographier : `scan` (ports), `connect` (shell distant) |
-| 3 | **ESCALADE** | `crack` (attaque de hash par dictionnaire), `su` (élévation), `decrypt` |
-| 4 | **NETTOYAGE** | Anti-forensique : lire puis `shred` les journaux, gérer le **traçage** |
-| 5 | **ORACLE** | Tout combiner : **pivoting** réseau, exfiltration, effacement complet |
+- **Hacking mini-games** in an overlay: sequence memory, a hex grid, nodes to click in order, all against the clock. Failing spikes the trace.
+- **Economy:** first intrusions pay a bounty, and `download` + `sell` turns files into crypto-credits.
+- **Darknet Market** (`shop`): three random upgrades, such as *Ghost-Mask* (−30 % trace) or *Overclock CPU* (+20 % mini-game time).
+- **Meta-progression:** credits and upgrades survive Game Over.
 
-**Le traçage** (optionnel) : à partir de la mission 4, chaque action sur un hôte
-distant remplit une jauge de trace. Si elle sature, c'est le **Game Over** (le run
-est perdu, mais crédits et augmentations restent acquis). Efface les logs (`shred`)
-pour la remettre à zéro… ou désactive la pression avec `trace off`.
+## Architecture
 
----
-
-## Boucle rogue-like (v2.0)
-
-- **Mini-jeux de hacking** : `crack` (sur un hash) et `bypass` (sur un nœud
-  sécurisé) déclenchent un défi en surimpression — mémoire de séquence, grille
-  hexadécimale à la *Cyberpunk 2077*, ou nœuds à cliquer dans l'ordre, contre le
-  chrono. **Rater fait bondir la jauge de traçage.**
-- **Économie** : chaque première intrusion paie une prime ; `download` puis
-  `sell` un fichier rapporte des **crypto-crédits**.
-- **Darknet Market** (`shop`) : 3 augmentations tirées aléatoirement, à acheter
-  (`buy <n>`). Exemples : *Ghost-Mask* (-30 % de traçage), *Overclock CPU* (+20 %
-  de temps sur les mini-jeux), *Auto-Bruteforce* (contourne les hacks faciles),
-  *Crypto-Miner* (+1 crédit/commande). `build` affiche ton rig et ses effets.
-- **Méta-progression** : crédits et augmentations survivent au Game Over — on
-  recommence plus fort. `reset` remet *tout* à zéro (progression + méta).
-
----
-
-## Architecture du code
-
-Le projet est découpé pour être **lisible et étudiable**. Chaque module coeur est
-encapsulé dans une IIFE (scope privé) et s'expose sur `window.HT` (navigateur) ou
-`module.exports` (Node) — le *même* fichier sert au jeu et aux tests.
+The code is split to be **readable and easy to study**. Every core module is wrapped in an IIFE and exposed on `window.HT` (browser) or `module.exports` (Node), so the *same* file runs in the game and in the tests.
 
 ```
-index.html                 assemblage + ordre de chargement des scripts
-css/terminal.css           direction artistique (brutaliste, scanlines CRT)
-js/
-  core/
-    VirtualFileSystem.js   FS virtuel OO : arbre de VfsNode, résolution de chemins
-    CommandParser.js        tokenizer robuste (guillemets, flags) -> commande structurée
-    StateMachine.js         FSM générique + états du terminal (BOOT/LOCAL/CONNECTED/…)
-    Crypto.js               hash de jeu (dictionnaire) + XOR — pédagogique, PAS sûr
-    Network.js              Host / Port / Network : cibles, auth, logs, pivoting
-    PlayerBuild.js          augmentations (StatsModifiers) + crédits, repliés en stats
-    Market.js               le Darknet Market : tirage + achat d'augmentations
-    Minigame.js             LOGIQUE des mini-jeux (génération + évaluation, testable)
-    world.js                LE CONTENU : machine locale, réseau Aegis, 5 missions
-    CommandRegistry.js      registre des commandes + exécution protégée (try/catch)
-    GameEngine.js           l'orchestrateur : sessions, trace, missions, économie, save
-    commands.js             toutes les commandes (help, ls, scan, crack, shop, …)
-  ui/
-    AudioFX.js              effets sonores rétro synthétisés (Web Audio)
-    MinigameUI.js           RENDU des mini-jeux (modal, chrono, saisie)
-    Terminal.js             couche DOM : saisie (curseur, souris), sidebar, statut
-  main.js                   point d'entrée : câble UI <-> moteur <-> commandes
-tests/
-  run.js                    suite d'auto-tests (node tests/run.js)
+js/core/
+  VirtualFileSystem.js   object-oriented VFS: a tree of VfsNode, path resolution
+  CommandParser.js       robust tokenizer (quotes, escapes, -la / --key=val flags), never throws
+  StateMachine.js        generic FSM: only declared transitions, fail-fast
+  Network.js             hosts, ports, auth, logs, pivoting
+  PlayerBuild.js         upgrades as data, folded into effective stats
+  Market.js · Minigame.js · world.js · CommandRegistry.js · GameEngine.js · commands.js
+js/ui/
+  Terminal.js · MinigameUI.js · AudioFX.js (Web Audio)
+tests/run.js             self-test suite
 ```
 
-La couche **logique** (tout `core/`) tourne sous Node : mini-jeux, build et
-boutique sont donc testés sans DOM. La couche **UI** (`ui/`) ne fait que du rendu.
-
-### Les trois pièces demandées
-
-- **Virtual File System orienté objet** (`VirtualFileSystem.js`) — un arbre de
-  `VfsNode` (fichier *ou* dossier). Toute la logique de chemins (absolu, relatif,
-  `.`, `..`, `~`) est centralisée dans `resolve()` : un seul endroit à raisonner,
-  un seul endroit qui échoue proprement (`null`) plutôt que de planter.
-
-- **State Machine** (`StateMachine.js`) — une FSM générique réutilisable. L'état du
-  terminal ne change que par des transitions **déclarées** ; une transition
-  interdite lève immédiatement (fail-fast) au lieu de produire un état incohérent.
-
-- **Command Parser robuste** (`CommandParser.js`) — un tokenizer qui gère les
-  guillemets simples/doubles, l'échappement, les flags courts groupés (`-la`) et
-  longs (`--key=val`). Il **ne lève jamais** : entrée vide, guillemet non fermé,
-  octets aléatoires — tout est toléré.
-
-- **PlayerBuild / StatsModifier** (`PlayerBuild.js`) — les augmentations sont de
-  simples objets de données déclarant leurs `mods`. `PlayerBuild` les **replie
-  dynamiquement** en stats effectives (multiplicateur de traçage, temps de
-  mini-jeu, niveau d'auto-bruteforce, crédits/commande…). Ajouter un item au pool
-  ne touche pas au moteur ; le Game Over conserve le build (méta-progression).
-
-### Le principe directeur
-
-Les **commandes ne mutent jamais l'état directement** : elles valident leurs
-arguments, appellent une méthode du **moteur** (`engine.connect`, `engine.escalate`,
-`engine.download`…), puis affichent. Le moteur est le seul à toucher la pile de
-sessions, la FSM et la trace. Résultat : logique testable sans DOM, et un
-`CommandRegistry.execute()` qui enveloppe chaque commande dans un `try/catch` — un
-bug de commande n'abat jamais la boucle de jeu.
-
----
-
-## Commandes
-
-`help` liste tout en jeu ; `help <cmd>` ou `man <cmd>` détaille une commande.
-
-- **Base** : `help` `man` `ls` `cat` `cd` `pwd` `whoami` `echo` `clear` `history`
-- **Réseau** : `ifconfig` `net` `scan` `connect` (`ssh`) `disconnect`
-- **Intrusion / crypto** : `crack` `bypass` `su` (`sudo`) `decrypt` `download`
-- **Anti-forensique** : `shred` (`clean`) `rm` `trace`
-- **Darknet / rogue-like** : `shop` (`market`) `buy` `sell` `build` (`rig`)
-- **Méta** : `mail` `mission` `sound` `reset`
-
-Confort : **TAB** autocomplète (commandes puis chemins), **↑/↓** parcourt
-l'historique, **←/→** déplacent le curseur *dans* la ligne, **Ctrl+L** efface
-l'écran. La **souris** sélectionne le texte et **Ctrl+C / Ctrl+V** fonctionnent
-(pratique pour les IP et les hash). Clique un nœud de la **carte réseau** pour
-insérer son IP dans la ligne de commande.
-
----
+**Guiding rule:** commands never mutate state directly. They validate arguments, call a method on the **engine**, then print. The engine alone owns the session stack, the FSM and the trace. As a result the logic can be tested without a DOM, and `CommandRegistry.execute()` wraps every command in a `try/catch`, so a buggy command can never crash the game loop.
 
 ## Tests
-
-Toute la logique (hors DOM) tourne aussi sous Node, ce qui permet une suite
-d'auto-tests exhaustive (**102 assertions**) : VFS, parser (+ *fuzzing*), FSM,
-crypto, **une partie complète jouée de bout en bout jusqu'à la victoire**, la
-mécanique de traçage, les **mini-jeux** (génération/évaluation), le système
-**PlayerBuild / Market**, l'**économie**, le **Game Over** avec méta-progression,
-et un bombardement d'entrées absurdes pour garantir que **le terminal ne plante
-jamais**.
 
 ```bash
 node tests/run.js
 ```
 
-Les corrections d'ergonomie (curseur positionnel, sélection souris, copier-coller,
-mini-jeux, achats) ont en plus été vérifiées dans un vrai navigateur.
+**102 assertions**: VFS, parser (with fuzzing), FSM, crypto, **a complete playthrough to victory**, trace, mini-games, market, economy, Game Over, and a barrage of absurd inputs to make sure **the terminal never crashes**.
 
----
+## Design notes
 
-## Notes de conception
+- **IP addresses** come only from *documentation* ranges (RFC 5737 / RFC 1918). It's fiction.
+- **The "crypto" is a deliberate toy** (dictionary hash, XOR) to illustrate the concepts. In real life you'd use SHA-256 through WebCrypto.
 
-- **Adresses IP** : uniquement des plages de *documentation* (RFC 5737 / RFC 1918).
-  Rien de réel, rien d'exploitable — c'est une fiction.
-- **La « crypto »** est volontairement jouet (hash par dictionnaire, XOR) : elle
-  illustre les concepts (attaque par dictionnaire, déchiffrement par clé) sans
-  prétendre à la moindre sécurité. Dans la vraie vie : SHA-256 via WebCrypto.
-- **Aucune esthétique superflue** : pas de dégradé, pas d'emoji, pas de fioriture.
-  Deux teintes fonctionnelles seulement (ambre = alerte, rouge éteint = erreur),
-  parce qu'un vrai terminal en a besoin pour rester lisible.
+## How it was built
+
+I built GRIDRUNNER with **Claude Code** from a brief I wrote: an OOP virtual file system, a state machine and a robust command parser. The prompt log is in [`historique_prompts.md`](historique_prompts.md) (in French).
+
+## License
+
+[MIT](LICENSE)
